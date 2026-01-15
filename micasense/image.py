@@ -215,22 +215,81 @@ class Image(object):
         return (self.band_index != other.band_index) or \
             (self.capture_id != other.capture_id)
 
+
+
+
     def raw(self):
         """ Lazy load the raw image once necessary """
         if self.__raw_image is None:
-            try:
-                import rawpy
-                # to support 12-bit DNG files, otherwise we get "SIFT found no features" error
-                if self.bits_per_pixel == 12:
-                    self.__raw_image = rawpy.imread(self.path).raw_image * 16
-                else:
-                    self.__raw_image = rawpy.imread(self.path).raw_image
-            except ImportError:
+            if self.path.lower().endswith('.tif') or self.path.lower().endswith('.tiff'):
+                # RedEdge-P TIFFs should be loaded with OpenCV
                 self.__raw_image = cv2.imread(self.path, -1)
-            except IOError:
-                print(("Could not open image at path {}".format(self.path)))
-                raise
+            else:
+                try:
+                    import rawpy
+                    if self.bits_per_pixel == 12:
+                        self.__raw_image = rawpy.imread(self.path).raw_image * 16
+                    else:
+                        self.__raw_image = rawpy.imread(self.path).raw_image
+                except (ImportError, Exception):
+                    # Fallback to OpenCV if rawpy fails or isn't present
+                    self.__raw_image = cv2.imread(self.path, -1)
+            
+            if self.__raw_image is None:
+                print(f"Could not open image at path {self.path}")
+                raise IOError(f"Could not open image at path {self.path}")
+                
         return self.__raw_image
+
+
+    def vignette(self):
+        x_dim, y_dim = self.raw().shape[1], self.raw().shape[0]
+        x, y = np.meshgrid(np.arange(x_dim), np.arange(y_dim))
+        x, y = x.T, y.T
+
+        # Initialize to avoid UnboundLocalError
+        vignette = np.ones_like(x, dtype=float) 
+
+        if len(self.vignette_center) > 0:
+            vignette_center_x, vignette_center_y = self.vignette_center
+            v_poly_list = list(self.vignette_polynomial)
+            v_poly_list.reverse()
+            v_poly_list.append(1.)
+            v_polynomial = np.array(v_poly_list)
+            r = np.hypot((x - vignette_center_x), (y - vignette_center_y))
+            vignette = 1. / np.polyval(v_polynomial, r)
+        elif len(self.vignette_polynomial2D) > 0:
+            xv = x.T / x_dim
+            yv = y.T / y_dim
+            k = self.vignette_polynomial2D
+            e = self.vignette_polynomial2Dexponents
+            p2 = np.zeros_like(xv, dtype=float)
+            for i, c in enumerate(k):
+                ex = e[2 * i]
+                ey = e[2 * i + 1]
+                p2 += c * xv ** ex * yv ** ey
+            vignette = (1. / p2).T
+            
+        return vignette, x, y
+
+
+    
+#    def raw(self):
+#        """ Lazy load the raw image once necessary """
+#        if self.__raw_image is None:
+#            try:
+#                import rawpy
+#                # to support 12-bit DNG files, otherwise we get "SIFT found no features" error
+#                if self.bits_per_pixel == 12:
+#                    self.__raw_image = rawpy.imread(self.path).raw_image * 16
+#                else:
+#                    self.__raw_image = rawpy.imread(self.path).raw_image
+#            except ImportError:
+#                self.__raw_image = cv2.imread(self.path, -1)
+#            except IOError:
+#                print(("Could not open image at path {}".format(self.path)))
+#                raise
+#        return self.__raw_image
 
     def set_raw(self, img):
         """ set raw image from input img"""
@@ -308,6 +367,7 @@ class Image(object):
         self.__intensity_image = intensity_image.T
         return self.__intensity_image
 
+    #6ita veik kažkiek
     def radiance(self, force_recompute=False):
         """ Lazy=computes and returns the radiance image after all radiometric
         corrections have been applied """
@@ -333,54 +393,84 @@ class Image(object):
         self.__radiance_image = radiance_image.T
         return self.__radiance_image
 
-    def vignette(self):
-        """ Get a numpy array which defines the value to multiply each pixel by to correct
-        for optical vignetting effects.
-        Note: this array is transposed from normal image orientation and comes as part
-        of a three-tuple, the other parts of which are also used by the radiance method.
-        """
-        x_dim, y_dim = self.raw().shape[1], self.raw().shape[0]
-        # get coordinate grid across image, seem swapped because of transposed vignette
-        x, y = np.meshgrid(np.arange(x_dim), np.arange(y_dim))
-        # meshgrid returns transposed arrays
-        x = x.T
-        y = y.T
-        # if we have a radial poly
-        if len(self.vignette_center) > 0:
+#    def vignette(self):
+#        """ Get a numpy array which defines the value to multiply each pixel by to correct
+#        for optical vignetting effects.
+#        Note: this array is transposed from normal image orientation and comes as part
+#        of a three-tuple, the other parts of which are also used by the radiance method.
+#        """
+#        x_dim, y_dim = self.raw().shape[1], self.raw().shape[0]
+#        # get coordinate grid across image, seem swapped because of transposed vignette
+#        x, y = np.meshgrid(np.arange(x_dim), np.arange(y_dim))
+#        # meshgrid returns transposed arrays
+#        x = x.T
+#        y = y.T
+#        # if we have a radial poly
+#        if len(self.vignette_center) > 0:
 
             # get vignette center
 
-            vignette_center_x, vignette_center_y = self.vignette_center
+#            vignette_center_x, vignette_center_y = self.vignette_center
 
             # get a copy of the vignette polynomial because we want to modify it here
-            v_poly_list = list(self.vignette_polynomial)
+#            v_poly_list = list(self.vignette_polynomial)
 
             # reverse list and append 1., so that we can call with numpy polyval
-            v_poly_list.reverse()
-            v_poly_list.append(1.)
-            v_polynomial = np.array(v_poly_list)
+#            v_poly_list.reverse()
+#            v_poly_list.append(1.)
+#            v_polynomial = np.array(v_poly_list)
 
             # perform vignette correction
 
             # compute matrix of distances from image center
-            r = np.hypot((x - vignette_center_x), (y - vignette_center_y))
+#            r = np.hypot((x - vignette_center_x), (y - vignette_center_y))
 
             # compute the vignette polynomial for each distance - we divide by the polynomial so that the
             # corrected image is image_corrected = image_original * vignetteCorrection
-            vignette = 1. / np.polyval(v_polynomial, r)
-        elif len(self.vignette_polynomial2D) > 0:
-            xv = x.T / x_dim
-            yv = y.T / y_dim
-            k = self.vignette_polynomial2D
-            e = self.vignette_polynomial2Dexponents
-            p2 = np.zeros_like(xv, dtype=float)
-            for i, c in enumerate(k):
-                ex = e[2 * i]
-                ey = e[2 * i + 1]
-                p2 += c * xv ** ex * yv ** ey
-            vignette = (1. / p2).T
-        return vignette, x, y
+#            vignette = 1. / np.polyval(v_polynomial, r)
+#        elif len(self.vignette_polynomial2D) > 0:
+#            xv = x.T / x_dim
+#            yv = y.T / y_dim
+#            k = self.vignette_polynomial2D
+#            e = self.vignette_polynomial2Dexponents
+#            p2 = np.zeros_like(xv, dtype=float)
+#            for i, c in enumerate(k):
+#                ex = e[2 * i]
+#                ey = e[2 * i + 1]
+#                p2 += c * xv ** ex * yv ** ey
+#            vignette = (1. / p2).T
+#        return vignette, x, y
 
+
+#    def vignette(self):
+#        x_dim, y_dim = self.raw().shape[1], self.raw().shape[0]
+#        x, y = np.meshgrid(np.arange(x_dim), np.arange(y_dim))
+#        x = x.T
+#        y = y.T
+        
+        # FIX: Initialize vignette so it always exists
+#        vignette = np.ones_like(x, dtype=float) 
+    
+#        if len(self.vignette_center) > 0:
+#            vignette_center_x, vignette_center_y = self.vignette_center
+#            v_poly_list = list(self.vignette_polynomial)
+#            v_poly_list.reverse()
+#            v_poly_list.append(1.)
+#            v_polynomial = np.array(v_poly_list)
+#            r = np.hypot((x - vignette_center_x), (y - vignette_center_y))
+#            vignette = 1. / np.polyval(v_polynomial, r)
+#        elif len(self.vignette_polynomial2D) > 0:
+#            # ... (keep existing 2D logic) ...
+#            vignette = (1. / p2).T
+            
+#        return vignette, x, y
+
+
+    
+
+
+
+    
     def undistorted_radiance(self, force_recompute=False):
         return self.undistorted(self.radiance(force_recompute))
 

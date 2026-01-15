@@ -761,7 +761,7 @@ class Capture(object):
                                  kp_ref[matches[:, 1]]),
                                 FundamentalMatrixTransform, min_samples=8,
                                 residual_threshold=.25, max_trials=5000,
-                                random_state=rng)
+                                rng=rng) # random_state=rng)
         inlier_keypoints_image = kp_image[matches[inliers, 0]]
         inlier_keypoints_ref = kp_ref[matches[inliers, 1]]
         n = len(inlier_keypoints_ref)
@@ -809,6 +809,7 @@ class Capture(object):
                 self.images[ref].raw()), rest_shape)
             ref_image_SIFT = (ref_image_SIFT / ref_image_SIFT.max()
                               * 65535).astype(np.uint16)
+            ref_image_SIFT = cv2.normalize(ref_image_SIFT, None, 0, 255, cv2.NORM_MINMAX).astype('uint8')  ##prideta del geresnio kontrasto
 
         descriptor_extractor.detect_and_extract(ref_image_SIFT)
         keypoints_ref = descriptor_extractor.keypoints
@@ -838,6 +839,7 @@ class Capture(object):
                 else:
                     # less strict filtering for the BLUE images
                     filter_tr.append(err_blue)
+            img = cv2.normalize(img, None, 0, 255, cv2.NORM_MINMAX).astype('uint8') ### prideta del kontrasto
             match_images.append(img)
             descriptor_extractor.detect_and_extract(img)
             keypoints.append(descriptor_extractor.keypoints)
@@ -887,7 +889,8 @@ class Capture(object):
                                                                                     warp_matrices_calibrated[ix],
                                                                                     scale,
                                                                                     scale_i,
-                                                                                    threshold=t)
+                                                                                    threshold=500) #originaliai t
+            kpi, kpr = [], []
             if verbose > 0:
                 print('found {:d} matching keypoints for index {:d}'.format(len(filtered_match), ix))
             # if we have enough SIFT matches that actually correspond, compute a model
