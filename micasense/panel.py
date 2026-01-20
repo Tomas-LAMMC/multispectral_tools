@@ -29,7 +29,7 @@ import re
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
-import pyzbar.pyzbar as pyzbar
+#import pyzbar.pyzbar as pyzbar
 from skimage import measure
 
 
@@ -81,20 +81,20 @@ class Panel(object):
     def __expect_panel(self):
         return self.image.band_name.upper() != 'LWIR'
 
-    def __find_qr(self):
-        decoded = pyzbar.decode(self.gray8b, symbols=[pyzbar.ZBarSymbol.QRCODE])
-        for symbol in decoded:
-            serial_str = symbol.data.decode('UTF-8')
-            m = re.search(r'RP\d{2}-(\d{7})-\D{2}', serial_str)
-            if m:
-                self.serial = serial_str
-                self.panel_version = int(self.serial[2:4])
-                self.qr_bounds = []
-                for point in symbol.polygon:
-                    self.qr_bounds.append([point.x, point.y])
-                self.qr_bounds = np.asarray(self.qr_bounds, np.int32)
-                self.qr_area = cv2.contourArea(self.qr_bounds)
-                break
+#    def __find_qr(self):
+#        decoded = pyzbar.decode(self.gray8b, symbols=[pyzbar.ZBarSymbol.QRCODE])
+#        for symbol in decoded:
+#            serial_str = symbol.data.decode('UTF-8')
+#            m = re.search(r'RP\d{2}-(\d{7})-\D{2}', serial_str)
+#            if m:
+#                self.serial = serial_str
+#                self.panel_version = int(self.serial[2:4])
+#                self.qr_bounds = []
+#                for point in symbol.polygon:
+#                    self.qr_bounds.append([point.x, point.y])
+#                self.qr_bounds = np.asarray(self.qr_bounds, np.int32)
+#                self.qr_area = cv2.contourArea(self.qr_bounds)
+#                break
 
     def __pt_in_image_bounds(self, pt):
         width, height = self.image.size()
